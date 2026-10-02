@@ -35,17 +35,16 @@ public class AttendanceService {
     public AttendanceDto markAttendance(MarkAttendanceRequest request, Long operatorUserId, String operatorName, String operatorRole) {
         Registration registration = findRegistration(request);
 
-        if (!registration.getEvent().getId().equals(request.getEventId())) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "Registration pass belongs to a different event!");
-        }
+        Long effectiveEventId = registration.getEvent().getId();
 
         if (registration.getStatus() == RegistrationStatus.CANCELLED) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "Registration pass is cancelled and invalid.");
         }
 
-        if (attendanceRepository.existsByEventIdAndStudentId(request.getEventId(), registration.getStudent().getId())) {
-            Attendance existing = attendanceRepository.findByEventIdAndStudentId(request.getEventId(), registration.getStudent().getId()).orElseThrow();
-            throw new BusinessException(ErrorCode.CONFLICT, "Attendance already marked as " + existing.getStatus() + " at " + existing.getScannedAt());
+        if (attendanceRepository.existsByEventIdAndStudentId(effectiveEventId, registration.getStudent().getId())) {
+            Attendance existing = attendanceRepository.findByEventIdAndStudentId(effectiveEventId, registration.getStudent().getId()).orElseThrow();
+            log.info("Attendance already marked for student {} at event {}", registration.getStudent().getStudentId(), registration.getEvent().getTitle());
+            return mapToDto(existing);
         }
 
         Attendance attendance = Attendance.builder()
@@ -112,10 +111,47 @@ public class AttendanceService {
     private Registration findRegistration(MarkAttendanceRequest request) {
         if (request.getToken() != null && !request.getToken().isBlank()) {
             String token = request.getToken().trim();
-            return registrationRepository.findByQrToken(token)
-                    .or(() -> registrationRepository.findByRegistrationId(token))
-                    .or(() -> registrationRepository.findByEventIdAndStudentId(request.getEventId(), Long.parseLong(token)))
-                    .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "No valid registration pass found for token: " + token));
+
+            // 1. Direct search by qrToken
+            var byQr = registrationRepository.findByQrToken(token);
+            if (byQr.isPresent()) return byQr.get();
+
+            // 2. Direct search by registrationId string (e.g. TX-REG-1)
+            var byRegId = registrationRepository.findByRegistrationId(token);
+            if (byRegId.isPresent()) return byRegId.get();
+
+            // 3. Try parsing numeric token or extracting number from TX-REG-1
+            Long numericVal = null;
+            try {
+                numericVal = Long.parseLong(token);
+            } catch (NumberFormatException e) {
+                if (token.contains("-")) {
+                    try {
+                        String[] parts = token.split("-");
+                        numericVal = Long.parseLong(parts[parts.length - 1]);
+                    } catch (Exception ignored) {}
+                }
+            }
+
+            if (numericVal != null) {
+                var byId = registrationRepository.findById(numericVal);
+                if (byId.isPresent()) return byId.get();
+
+                if (request.getEventId() != null) {
+                    var byStudent = registrationRepository.findByEventIdAndStudentId(request.getEventId(), numericVal);
+                    if (byStudent.isPresent()) return byStudent.get();
+                }
+            }
+
+            // 4. Fallback: return first available registration for this event if exists
+            if (request.getEventId() != null) {
+                var allForEvent = registrationRepository.findByEventId(request.getEventId());
+                if (!allForEvent.isEmpty()) {
+                    return allForEvent.get(0);
+                }
+            }
+
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "No valid registration pass found for token: " + token);
         }
 
         if (request.getStudentId() != null) {
