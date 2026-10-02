@@ -1,0 +1,50 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:technox_local;DB_CLOSE_DELAY=-1;MODE=MySQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE;NON_KEYWORDS=YEAR,POSITION
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        dialect: org.hibernate.dialect.H2Dialect
+  flyway:
+    enabled: false
+  mail:
+    host: ${BREVO_SMTP_HOST:smtp-relay.brevo.com}
+    port: ${BREVO_SMTP_PORT:587}
+    username: ${BREVO_SMTP_USER:}
+    password: ${BREVO_SMTP_KEY:}
+    protocol: smtp
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
+app:
+  mail:
+    from-address: loopscan.xyz@gmail.com
+    from-name: "TECHNO-X | TGI Campus Portal"
+    enabled: true
+  brevo:
+    api-key: ${BREVO_API_KEY:}
+
+logging:
+  level:
+    com.technox: INFO
+    org.springframework.security: WARN
+    org.springframework.mail: DEBUG

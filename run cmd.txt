@@ -1,0 +1,4 @@
+backend ===     mvnw spring-boot:run
+frontend ===   npm.cmd run dev
+
+Ctrl + C for cancel

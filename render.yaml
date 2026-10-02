@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: techno-x-backend
+    runtime: java
+    buildCommand: ./mvnw -B clean package -DskipTests
+    startCommand: java -Dspring.profiles.active=prod -Dserver.port=$PORT -jar target/techno-x-backend-1.0.0.jar
+    envVars:
+      - key: JAVA_OPTS
+        value: "-Xmx512m -Xms256m"
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod

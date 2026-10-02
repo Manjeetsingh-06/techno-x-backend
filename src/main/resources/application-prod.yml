@@ -1,0 +1,57 @@
+spring:
+  datasource:
+    url: ${TIDB_URL:jdbc:mysql://gateway01.ap-southeast-1.prod.aws.tidbcloud.com:4000/technox?createDatabaseIfNotExist=true&useSSL=true&enabledTLSProtocols=TLSv1.2,TLSv1.3&sslMode=REQUIRED&allowPublicKeyRetrieval=false}
+    username: ${TIDB_USER:3kHhLwSAYMaXWKN.root}
+    password: ${TIDB_PASSWORD:H1HAy5N7tl3invph}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: false
+  flyway:
+    enabled: false
+  mail:
+    host: ${BREVO_SMTP_HOST:smtp-relay.brevo.com}
+    port: ${BREVO_SMTP_PORT:587}
+    username: ${BREVO_SMTP_USER:}
+    password: ${BREVO_SMTP_KEY:}
+    protocol: smtp
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
+
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:https://techno-x-tgi.vercel.app,http://localhost:5173}
+    allowed-methods: GET,POST,PUT,PATCH,DELETE,OPTIONS
+    allowed-headers: "*"
+    allow-credentials: true
+  mail:
+    from-address: loopscan.xyz@gmail.com
+    from-name: "TECHNO-X | TGI Campus Portal"
+    enabled: true
+  brevo:
+    api-key: ${BREVO_API_KEY:}
+
+logging:
+  level:
+    com.technox: INFO
+    org.springframework: WARN
