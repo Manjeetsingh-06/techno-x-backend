@@ -22,6 +22,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -30,6 +33,7 @@ public class AttendanceService {
     private final AttendanceRepository attendanceRepository;
     private final AttendanceCorrectionRepository correctionRepository;
     private final RegistrationRepository registrationRepository;
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public AttendanceDto markAttendance(MarkAttendanceRequest request, Long operatorUserId, String operatorName, String operatorRole) {
@@ -112,15 +116,64 @@ public class AttendanceService {
         if (request.getToken() != null && !request.getToken().isBlank()) {
             String token = request.getToken().trim();
 
+            // Try extracting fields if token is JSON string (from scanned QR)
+            if (token.startsWith("{") && token.endsWith("}")) {
+                try {
+                    JsonNode node = objectMapper.readTree(token);
+                    if (node.hasNonNull("eventId") && request.getEventId() == null) {
+                        try {
+                            String evStr = node.get("eventId").asText();
+                            request.setEventId(Long.parseLong(evStr.replaceAll("\\D", "")));
+                        } catch (Exception ignored) {}
+                    }
+                    if (node.hasNonNull("qrToken")) {
+                        var reg = registrationRepository.findByQrToken(node.get("qrToken").asText());
+                        if (reg.isPresent()) return reg.get();
+                    }
+                    if (node.hasNonNull("passId")) {
+                        var reg = registrationRepository.findByDigitalPassId(node.get("passId").asText());
+                        if (reg.isPresent()) return reg.get();
+                    }
+                    if (node.hasNonNull("regId")) {
+                        var reg = registrationRepository.findByRegistrationId(node.get("regId").asText());
+                        if (reg.isPresent()) return reg.get();
+                    }
+                    if (node.hasNonNull("studentCode")) {
+                        var regs = registrationRepository.findByStudentStudentId(node.get("studentCode").asText());
+                        if (!regs.isEmpty()) return regs.get(0);
+                    }
+                    if (node.hasNonNull("studentId")) {
+                        var regs = registrationRepository.findByStudentStudentId(node.get("studentId").asText());
+                        if (!regs.isEmpty()) return regs.get(0);
+                    }
+                } catch (Exception ignored) {}
+            }
+
             // 1. Direct search by qrToken
             var byQr = registrationRepository.findByQrToken(token);
             if (byQr.isPresent()) return byQr.get();
 
-            // 2. Direct search by registrationId string (e.g. TX-REG-1)
+            // 2. Direct search by registrationId string (e.g. TX-REG-1, TX-2026-000001)
             var byRegId = registrationRepository.findByRegistrationId(token);
             if (byRegId.isPresent()) return byRegId.get();
 
-            // 3. Try parsing numeric token or extracting number from TX-REG-1
+            // 3. Direct search by digitalPassId (e.g. TX-PASS-1)
+            var byPassId = registrationRepository.findByDigitalPassId(token);
+            if (byPassId.isPresent()) return byPassId.get();
+
+            // 4. Search by student roll code (e.g. TGI2026BCA101)
+            var byStudentCode = registrationRepository.findByStudentStudentId(token);
+            if (!byStudentCode.isEmpty()) {
+                if (request.getEventId() != null) {
+                    var match = byStudentCode.stream()
+                            .filter(r -> r.getEvent().getId().equals(request.getEventId()))
+                            .findFirst();
+                    if (match.isPresent()) return match.get();
+                }
+                return byStudentCode.get(0);
+            }
+
+            // 5. Try parsing numeric token or extracting number from TX-REG-1
             Long numericVal = null;
             try {
                 numericVal = Long.parseLong(token);
@@ -143,7 +196,7 @@ public class AttendanceService {
                 }
             }
 
-            // 4. Fallback: return first available registration for this event if exists
+            // 6. Fallback: return first available registration for this event if exists
             if (request.getEventId() != null) {
                 var allForEvent = registrationRepository.findByEventId(request.getEventId());
                 if (!allForEvent.isEmpty()) {
@@ -155,8 +208,14 @@ public class AttendanceService {
         }
 
         if (request.getStudentId() != null) {
-            return registrationRepository.findByEventIdAndStudentId(request.getEventId(), request.getStudentId())
-                    .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Student is not registered for this event."));
+            if (request.getEventId() != null) {
+                var byEvAndStu = registrationRepository.findByEventIdAndStudentId(request.getEventId(), request.getStudentId());
+                if (byEvAndStu.isPresent()) return byEvAndStu.get();
+            }
+            var byStu = registrationRepository.findByStudentId(request.getStudentId());
+            if (!byStu.isEmpty()) return byStu.get(0);
+
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Student is not registered for this event.");
         }
 
         throw new BusinessException(ErrorCode.BAD_REQUEST, "Either pass token or student ID must be provided.");

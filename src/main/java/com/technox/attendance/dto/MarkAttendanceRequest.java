@@ -13,7 +13,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class MarkAttendanceRequest {
 
-    @NotNull(message = "Event ID is required")
+    // Event ID (optional if token uniquely identifies registration pass)
     private Long eventId;
 
     // Either passToken (QR token or digitalPassId or studentId)

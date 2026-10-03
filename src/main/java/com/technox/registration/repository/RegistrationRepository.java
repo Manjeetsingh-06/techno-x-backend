@@ -19,6 +19,13 @@ public interface RegistrationRepository extends JpaRepository<Registration, Long
 
     Optional<Registration> findByQrToken(String qrToken);
 
+    Optional<Registration> findByDigitalPassId(String digitalPassId);
+
+    List<Registration> findByEventId(Long eventId);
+
+    @Query("SELECT r FROM Registration r WHERE r.student.studentId = :studentId")
+    List<Registration> findByStudentStudentId(@Param("studentId") String studentId);
+
     Optional<Registration> findByEventIdAndStudentId(Long eventId, Long studentId);
 
     boolean existsByEventIdAndStudentId(Long eventId, Long studentId);
